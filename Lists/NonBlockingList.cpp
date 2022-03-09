@@ -25,23 +25,6 @@ class NonBlockingList {
     bool rmv(int value);
     bool ctn(int value);
 
-    // For test Correctness
-    bool add(int value, int threadId);
-    bool rmv(int value, int threadId);
-    bool ctn(int value, int threadId);
-
-    void printList() {
-        Node* cur = head->next;
-        std::cout << "[";
-        while (cur != tail) {
-            if (cur != head->next)
-                std::cout << ", ";
-            std::cout << cur->value;
-            cur = cur->next;
-        }
-        std::cout << "]" << std::endl;
-    }
-
    private:
     // sentinels
     Node* head;
@@ -57,13 +40,18 @@ class NonBlockingList {
     */
     // is_marked_reference(r) returns true if and only if r is a marked
     // reference.
-    bool is_marked_reference(Node* node) { return ((long)node & 1 == 1); }
-
-    Node* get_unmarked_reference(Node* node) {
-        return (Node*)((long)node & ((~0) - 1));
+    bool is_marked_reference(Node* node) { 
+        return ((long)node & 0x1 == 1); 
     }
 
-    Node* get_marked_reference(Node* node) { return (Node*)(((long)node) | 1); }
+    Node* get_unmarked_reference(Node* node) {
+        return (Node*)((long)node & (~0x1));
+    }
+
+    Node* get_marked_reference(Node* node) { 
+        return (Node*)(((long)node) | 0x1); 
+    }
+
 };
 
 bool NonBlockingList::add(int value) {
@@ -165,71 +153,4 @@ SEARCH_AGAIN:
             else
                 return right_node; /*R2*/
     } while (true);                /*B2*/
-}
-
-
-
-
-bool NonBlockingList::add(int value, int threadId) {
-    Node* new_node = new Node(value);
-    Node *right_node = nullptr, *left_node = nullptr;
-    do {
-        // locate the pair of nodes between which the new node is to be
-        // added.
-        right_node = search(value, left_node);
-        if ((right_node != tail) && (right_node->value == value)) { /*T1*/
-            seq.push_back({threadId, Operation{methodname::add, value, false}});
-            return false;
-        }
-        new_node->next = right_node;
-        if (__sync_bool_compare_and_swap(&(left_node->next), right_node,
-                                         new_node)) { /*C2*/
-            seq.push_back({threadId, Operation{methodname::add, value, true}});
-            return true;
-        }
-    } while (true); /*B3*/
-}
-
-bool NonBlockingList::rmv(int value, int threadId) {
-    Node *right_node = nullptr, *right_node_next = nullptr,
-         *left_node = nullptr;
-    do {
-        right_node =
-            search(value, left_node);  // locate the node to delete
-        if ((right_node == tail) || (right_node->value != value)) { /*T1*/
-            seq.push_back({threadId, Operation{methodname::rmv, value, false}});
-            return false;
-        }
-        right_node_next = right_node->next;
-        if (!is_marked_reference(right_node_next))
-            if (__sync_bool_compare_and_swap(
-                    &(right_node->next), right_node_next,
-                    get_marked_reference(
-                        right_node_next))) /*C3*/  // the node is logically
-                                                   // deleted
-                break;
-    } while (true); /*B4*/
-
-    if (!__sync_bool_compare_and_swap(
-            &(left_node->next), right_node,
-            right_node_next)) /*C4*/  // the node is physically deleted
-        right_node = search(right_node->value, left_node);
-    
-    seq.push_back({threadId, Operation{methodname::rmv, value, true}});
-    return true;
-}
-
-bool NonBlockingList::ctn(int value, int threadId) {
-    Node *right_node = nullptr, *left_node = nullptr;
-    right_node = search(value, left_node);
-    if ((right_node == tail) || (right_node->value != value)) {
-        seq.push_back({threadId, Operation{methodname::ctn, value, false}});
-        return false;
-    }
-    
-    else {
-        seq.push_back({threadId, Operation{methodname::ctn, value, true}});
-        return true;
-    }
-        
 }

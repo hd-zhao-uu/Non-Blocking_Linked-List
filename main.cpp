@@ -115,6 +115,59 @@ void _testList(std::vector<int>& threadNums,
     std::vector<std::string> results;
     std::vector<std::string> logs;
 
+    // NonBlocking List Set
+    for (auto& nThread : threadNums) {
+        GET_TIME(startTime);
+        std::thread* workers = new std::thread[nThread];
+        int* counter = new int[nThread];
+        NonBlockingList* nbl = new NonBlockingList();
+
+        for (int i = 0; i < nThread; i++) {
+            workers[i] = std::thread(workerFunc<NonBlockingList>, i,
+                                     std::ref(nbl), std::ref(testCase));
+        }
+
+        for (int i = 0; i < nThread; i++) {
+            workers[i].join();
+        }
+
+        GET_TIME(endTime);
+        elapsed = endTime - startTime;
+        opPer10Sec = testCase.size() * nThread / elapsed * 10;
+
+        char buff[100];
+        snprintf(
+            buff, sizeof(buff),
+            "[OUTPUT] %2d threads, %24s: %12.3lf operations per 10 seconds.\n",
+            nThread, "NonBlocking List Set", opPer10Sec);
+        std::string result = buff;
+        results.push_back(result);
+        printf(
+            "[OUTPUT] %2d threads, %24s: %12.3lf operations per 10 seconds.\n",
+            nThread, "NonBlocking List Set", opPer10Sec);
+
+        char logBuff[100];
+        snprintf(logBuff, sizeof(logBuff), "%2d, %12.3lf\n", nThread,
+                 opPer10Sec);
+        std::string log = logBuff;
+        logs.push_back(log);
+
+        delete[] workers;
+        delete nbl;
+    }
+
+    resultVector2File(outputFilePath, results);
+    results.clear();
+    std::cout << smallDivider;
+    strLine2File(outputFilePath, smallDivider);
+
+    mark = "[NonBlocking List Set]\n";
+    strLine2File(logPath, mark);
+    resultVector2File(logPath, logs);
+    strLine2File(logPath, smallDivider);
+    logs.clear();
+
+
     // Coarse-grained List Set
     for (auto& nThread : threadNums) {
         GET_TIME(startTime);
@@ -168,7 +221,7 @@ void _testList(std::vector<int>& threadNums,
     strLine2File(logPath, smallDivider);
     logs.clear();
 
-    // Coarse-grained List Set
+    // Fine-grained List Set
     for (auto& nThread : threadNums) {
         GET_TIME(startTime);
         std::thread* workers = new std::thread[nThread];
@@ -220,7 +273,7 @@ void _testList(std::vector<int>& threadNums,
     strLine2File(logPath, smallDivider);
     logs.clear();
 
-    // Coarse-grained List Set
+    // Optimistic List Set
     for (auto& nThread : threadNums) {
         GET_TIME(startTime);
         std::thread* workers = new std::thread[nThread];
@@ -267,58 +320,6 @@ void _testList(std::vector<int>& threadNums,
     strLine2File(outputFilePath, smallDivider);
 
     mark = "[Optimistic List Set]\n";
-    strLine2File(logPath, mark);
-    resultVector2File(logPath, logs);
-    strLine2File(logPath, smallDivider);
-    logs.clear();
-
-    // NonBlocking List Set
-    for (auto& nThread : threadNums) {
-        GET_TIME(startTime);
-        std::thread* workers = new std::thread[nThread];
-        int* counter = new int[nThread];
-        NonBlockingList* nbl = new NonBlockingList();
-
-        for (int i = 0; i < nThread; i++) {
-            workers[i] = std::thread(workerFunc<NonBlockingList>, i,
-                                     std::ref(nbl), std::ref(testCase));
-        }
-
-        for (int i = 0; i < nThread; i++) {
-            workers[i].join();
-        }
-
-        GET_TIME(endTime);
-        elapsed = endTime - startTime;
-        opPer10Sec = testCase.size() * nThread / elapsed * 10;
-
-        char buff[100];
-        snprintf(
-            buff, sizeof(buff),
-            "[OUTPUT] %2d threads, %24s: %12.3lf operations per 10 seconds.\n",
-            nThread, "NonBlocking List Set", opPer10Sec);
-        std::string result = buff;
-        results.push_back(result);
-        printf(
-            "[OUTPUT] %2d threads, %24s: %12.3lf operations per 10 seconds.\n",
-            nThread, "NonBlocking List Set", opPer10Sec);
-
-        char logBuff[100];
-        snprintf(logBuff, sizeof(logBuff), "%2d, %12.3lf\n", nThread,
-                 opPer10Sec);
-        std::string log = logBuff;
-        logs.push_back(log);
-
-        delete[] workers;
-        delete nbl;
-    }
-
-    resultVector2File(outputFilePath, results);
-    results.clear();
-    std::cout << smallDivider;
-    strLine2File(outputFilePath, smallDivider);
-
-    mark = "[NonBlocking List Set]\n";
     strLine2File(logPath, mark);
     resultVector2File(logPath, logs);
     strLine2File(logPath, smallDivider);
