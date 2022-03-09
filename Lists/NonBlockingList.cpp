@@ -1,17 +1,34 @@
 #include <iostream>
+#include <vector>
 #include "Node.h"
+#include "Operation.h"
+#include "Pair.h"
 
 class NonBlockingList {
    public:
+    std::vector<std::pair<int, Operation>> seq;
+
     NonBlockingList() {
         head = new Node();
         tail = new Node();
         head->next = tail;
     }
 
+    NonBlockingList(std::vector<std::pair<int, Operation>>& sharedSeq) {
+        head = new Node();
+        tail = new Node();
+        head->next = tail;
+        seq = sharedSeq;
+    }
+
     bool add(int value);
     bool rmv(int value);
     bool ctn(int value);
+
+    // For test Correctness
+    bool add(int value, int threadId);
+    bool rmv(int value, int threadId);
+    bool ctn(int value, int threadId);
 
     void printList() {
         Node* cur = head->next;
@@ -26,7 +43,7 @@ class NonBlockingList {
     }
 
    private:
-    // sentinel
+    // sentinels
     Node* head;
     Node* tail;
 
@@ -51,7 +68,7 @@ class NonBlockingList {
 
 bool NonBlockingList::add(int value) {
     Node* new_node = new Node(value);
-    Node *right_node, *left_node;
+    Node *right_node = nullptr, *left_node = nullptr;
     do {
         // locate the pair of nodes between which the new node is to be
         // added.
@@ -65,13 +82,13 @@ bool NonBlockingList::add(int value) {
     } while (true); /*B3*/
 }
 
-bool NonBlockingList::rmv(int search_value) {
+bool NonBlockingList::rmv(int value) {
     Node *right_node = nullptr, *right_node_next = nullptr,
          *left_node = nullptr;
     do {
         right_node =
-            search(search_value, left_node);  // locate the node to delete
-        if ((right_node == tail) || (right_node->value != search_value)) /*T1*/
+            search(value, left_node);  // locate the node to delete
+        if ((right_node == tail) || (right_node->value != value)) /*T1*/
             return false;
         right_node_next = right_node->next;
         if (!is_marked_reference(right_node_next))
@@ -90,16 +107,16 @@ bool NonBlockingList::rmv(int search_value) {
     return true;
 }
 
-bool NonBlockingList::ctn(int search_value) {
-    Node *right_node, *left_node;
-    right_node = search(search_value, left_node);
-    if ((right_node == tail) || (right_node->value != search_value))
+bool NonBlockingList::ctn(int value) {
+    Node *right_node = nullptr, *left_node = nullptr;
+    right_node = search(value, left_node);
+    if ((right_node == tail) || (right_node->value != value))
         return false;
     else
         return true;
 }
 
-Node* NonBlockingList::search(int search_value, Node*& left_node) {
+Node* NonBlockingList::search(int value, Node*& left_node) {
     /*
         It takes a search value and returns references to two nodes called the
        left node and right node for that value. Conditions need to be satisfied:
@@ -110,7 +127,7 @@ Node* NonBlockingList::search(int search_value, Node*& left_node) {
         3. the right node must be the immediate successor of the left node.
 
     */
-    Node *left_node_next, *right_node;
+    Node *left_node_next = nullptr, *right_node = nullptr;
 SEARCH_AGAIN:
     do {
         Node* t = head;
@@ -128,7 +145,7 @@ SEARCH_AGAIN:
             if (t == tail) break;
             t_next = t->next;
         } while (is_marked_reference(t_next) ||
-                 (t->value < search_value)); /*B1*/
+                 (t->value < value)); /*B1*/
         right_node = t;
 
         /* Step 2: Check nodes are adjacent */
@@ -148,4 +165,71 @@ SEARCH_AGAIN:
             else
                 return right_node; /*R2*/
     } while (true);                /*B2*/
+}
+
+
+
+
+bool NonBlockingList::add(int value, int threadId) {
+    Node* new_node = new Node(value);
+    Node *right_node = nullptr, *left_node = nullptr;
+    do {
+        // locate the pair of nodes between which the new node is to be
+        // added.
+        right_node = search(value, left_node);
+        if ((right_node != tail) && (right_node->value == value)) { /*T1*/
+            seq.push_back({threadId, Operation{methodname::add, value, false}});
+            return false;
+        }
+        new_node->next = right_node;
+        if (__sync_bool_compare_and_swap(&(left_node->next), right_node,
+                                         new_node)) { /*C2*/
+            seq.push_back({threadId, Operation{methodname::add, value, true}});
+            return true;
+        }
+    } while (true); /*B3*/
+}
+
+bool NonBlockingList::rmv(int value, int threadId) {
+    Node *right_node = nullptr, *right_node_next = nullptr,
+         *left_node = nullptr;
+    do {
+        right_node =
+            search(value, left_node);  // locate the node to delete
+        if ((right_node == tail) || (right_node->value != value)) { /*T1*/
+            seq.push_back({threadId, Operation{methodname::rmv, value, false}});
+            return false;
+        }
+        right_node_next = right_node->next;
+        if (!is_marked_reference(right_node_next))
+            if (__sync_bool_compare_and_swap(
+                    &(right_node->next), right_node_next,
+                    get_marked_reference(
+                        right_node_next))) /*C3*/  // the node is logically
+                                                   // deleted
+                break;
+    } while (true); /*B4*/
+
+    if (!__sync_bool_compare_and_swap(
+            &(left_node->next), right_node,
+            right_node_next)) /*C4*/  // the node is physically deleted
+        right_node = search(right_node->value, left_node);
+    
+    seq.push_back({threadId, Operation{methodname::rmv, value, true}});
+    return true;
+}
+
+bool NonBlockingList::ctn(int value, int threadId) {
+    Node *right_node = nullptr, *left_node = nullptr;
+    right_node = search(value, left_node);
+    if ((right_node == tail) || (right_node->value != value)) {
+        seq.push_back({threadId, Operation{methodname::ctn, value, false}});
+        return false;
+    }
+    
+    else {
+        seq.push_back({threadId, Operation{methodname::ctn, value, true}});
+        return true;
+    }
+        
 }

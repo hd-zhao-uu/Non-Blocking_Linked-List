@@ -8,6 +8,7 @@ struct Node {
     Node* next;
     std::mutex lock;
 
+    Node() {}
     Node(int value) : value(value) {}
 };
 
