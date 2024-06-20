@@ -40,16 +40,16 @@ class NonBlockingList {
     */
     // is_marked_reference(r) returns true if and only if r is a marked
     // reference.
-    bool is_marked_reference(Node* node) { 
-        return ((long)node & 0x1 == 1); 
+    bool is_marked_reference(Node* node) {
+        return (((std::uintptr_t)node & 0x1) == 1);
     }
 
     Node* get_unmarked_reference(Node* node) {
-        return (Node*)((long)node & (~0x1));
+        return (Node*)((std::uintptr_t)node & (~0x1));
     }
 
-    Node* get_marked_reference(Node* node) { 
-        return (Node*)(((long)node) | 0x1); 
+    Node* get_marked_reference(Node* node) {
+        return (Node*)(((std::uintptr_t)node) | 0x1);
     }
 
 };
@@ -137,20 +137,24 @@ SEARCH_AGAIN:
         right_node = t;
 
         /* Step 2: Check nodes are adjacent */
-        if (left_node_next == right_node)
+        if (left_node_next == right_node) {
             if ((right_node != tail) &&
-                is_marked_reference(right_node->next))  // right_node.next is
-                                                        // marked to be deleted
-                goto SEARCH_AGAIN;                      /*G1*/
-            else
+                is_marked_reference(right_node->next))  { // right_node.next is
+                                                          // marked to be deleted
+                goto SEARCH_AGAIN;                        /*G1*/
+            } else {
                 return right_node; /*R1*/
+            }
+        }
 
         /* Step 3: rmv one or more marked nodes */
         if (__sync_bool_compare_and_swap(&(left_node->next), left_node_next,
-                                         right_node)) /*C1*/
-            if ((right_node != tail) && is_marked_reference(right_node->next))
+                                         right_node)) { /*C1*/
+            if ((right_node != tail) && is_marked_reference(right_node->next)) {
                 goto SEARCH_AGAIN; /*G2*/
-            else
+            } else {
                 return right_node; /*R2*/
+            }
+        }
     } while (true);                /*B2*/
 }
